@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Calendar Day View</title>
+  <style>
+    :root {
+      --notion-bg: #ffffff;
+      --notion-text: #37352f;
+      --notion-gray: #e5e5e5;
+      --notion-light-gray: #f7f6f3;
+      --notion-blue: #2383e2;
+      --notion-red: #ff7369;
+      --notion-yellow: #ffbf00;
+      --notion-green: #4dab9a;
+      --notion-purple: #9065b0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      color: var(--notion-text);
+      background-color: var(--notion-bg);
+      margin: 0;
+      padding: 16px;
+    }
+
+    .calendar-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .date-display {
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    .button {
+      background-color: var(--notion-light-gray);
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+
+    .button:hover {
+      background-color: var(--notion-gray);
+    }
+
+    .today-button {
+      margin-left: 8px;
+      background-color: var(--notion-blue);
+      color: white;
+    }
+
+    .today-button:hover {
+      background-color: #1a6fc4;
+    }
+
+    .calendar {
+      border: 1px solid var(--notion-gray);
+      border-radius: 4px;
+    }
+
+    .time-slots {
+      position: relative;
+      min-height: 720px;
+    }
+
+    .time-label {
+      position: absolute;
+      left: 0;
+      width: 60px;
+      text-align: right;
+      padding-right: 10px;
+      color: #555;
+      font-size: 12px;
+    }
+
+    .hour-line {
+      position: absolute;
+      left: 70px;
+      right: 0;
+      border-top: 1px solid var(--notion-gray);
+    }
+
+    .events-container {
+      position: absolute;
+      left: 70px;
+      right: 0;
+    }
+
+    .event {
+      position: absolute;
+      border-radius: 4px;
+      padding: 6px 8px;
+      font-size: 14px;
+      color: white;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+
+    .event-blue {
+      background-color: var(--notion-blue);
+    }
+
+    .event-red {
+      background-color: var(--notion-red);
+    }
+
+    .event-yellow {
+      background-color: var(--notion-yellow);
+    }
+
+    .event-green {
+      background-color: var(--notion-green);
+    }
+
+    .event-purple {
+      background-color: var(--notion-purple);
+    }
+
+    .event-title {
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .event-time {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    .no-events {
+      text-align: center;
+      padding: 20px;
+      color: #888;
+      font-style: italic;
+    }
+
+    .setup-instructions {
+      margin-top: 20px;
+      padding: 16px;
+      background-color: var(--notion-light-gray);
+      border-radius: 4px;
+    }
+
+    .setup-instructions h3 {
+      margin-top: 0;
+    }
+
+    .setup-instructions code {
+      background-color: rgba(135, 131, 120, 0.15);
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-size: 90%;
+    }
+
+    .loading-spinner {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100px;
+    }
+
+    .spinner {
+      border: 4px solid var(--notion-light-gray);
+      border-top: 4px solid var(--notion-blue);
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1.5s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="calendar-container">
+    <div class="header">
+      <div>
+        <button id="prev-day" class="button">Previous Day</button>
+        <button id="next-day" class="button">Next Day</button>
+        <button id="today" class="button today-button">Today</button>
+      </div>
+      <div class="date-display" id="date-display"></div>
+    </div>
+    
+    <div class="calendar">
+      <div class="time-slots" id="time-slots">
+        <div id="events-container" class="events-container"></div>
+      </div>
+    </div>
+    
+    <div class="setup-instructions">
+      <h3>How to set up with Google Calendar</h3>
+      <ol>
+        <li>In Google Calendar, click on Settings (gear icon) → Settings</li>
+        <li>On the left side, click on "Settings for my calendars" and select your calendar</li>
+        <li>Scroll down to "Integrate calendar" section</li>
+        <li>Copy your "Public address in iCal format" URL</li>
+        <li>Create a simple proxy server to fetch this calendar feed (due to CORS restrictions)</li>
+        <li>Replace the <code>CALENDAR_URL</code> constant in this code with your proxy URL</li>
+      </ol>
+      <p><strong>Note:</strong> Due to browser security restrictions, you'll need a proxy server to fetch your Google Calendar data. You can create a simple one with services like Netlify Functions, Vercel Functions, or Google Cloud Functions.</p>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ical.js/1.5.0/ical.min.js"></script>
+  <script>
+    // Replace with your calendar URL (through a CORS proxy)
+    const CALENDAR_URL = 'YOUR_ICAL_PROXY_URL';
+    
+    let currentDate = new Date();
+    const eventColors = ['event-blue', 'event-red', 'event-yellow', 'event-green', 'event-purple'];
+    
+    function formatDate(date) {
+      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      return date.toLocaleDateString('en-US', options);
+    }
+    
+    function formatTime(date) {
+      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+    
+    function createTimeSlots() {
+      const timeSlots = document.getElementById('time-slots');
+      timeSlots.innerHTML = '';
+      
+      // Add the events container back
+      const eventsContainer = document.createElement('div');
+      eventsContainer.id = 'events-container';
+      eventsContainer.className = 'events-container';
+      timeSlots.appendChild(eventsContainer);
+      
+      // Create time slots from 7 AM to 9 PM
+      for (let hour = 7; hour <= 21; hour++) {
+        const timeLabel = document.createElement('div');
+        timeLabel.className = 'time-label';
+        timeLabel.style.top = `${(hour - 7) * 60}px`;
+        timeLabel.textContent = `${hour % 12 === 0 ? 12 : hour % 12} ${hour < 12 ? 'AM' : 'PM'}`;
+        timeSlots.appendChild(timeLabel);
+        
+        const hourLine = document.createElement('div');
+        hourLine.className = 'hour-line';
+        hourLine.style.top = `${(hour - 7) * 60}px`;
+        timeSlots.appendChild(hourLine);
+      }
+    }
+    
+    function showLoadingSpinner() {
+      const eventsContainer = document.getElementById('events-container');
+      eventsContainer.innerHTML = `
+        <div class="loading-spinner">
+          <div class="spinner"></div>
+        </div>
+      `;
+    }
+    
+    function showNoEvents() {
+      const eventsContainer = document.getElementById('events-container');
+      eventsContainer.innerHTML = `
+        <div class="no-events">
+          No events scheduled for today
+        </div>
+      `;
+    }
+    
+    function renderCalendar() {
+      document.getElementById('date-display').textContent = formatDate(currentDate);
+      createTimeSlots();
+      
+      // For demo purposes, we'll create sample events
+      // In a real implementation, you would fetch from Google Calendar
+      createSampleEvents();
+      
+      // Uncomment this to use actual Google Calendar data
+      // fetchAndDisplayEvents();
+    }
+    
+    function createSampleEvents() {
+      const eventsContainer = document.getElementById('events-container');
+      
+      // Clear existing events
+      while (eventsContainer.firstChild) {
+        eventsContainer.removeChild(eventsContainer.firstChild);
+      }
+      
+      // Sample events for demonstration
+      const events = [
+        {
+          title: 'Team Meeting',
+          start: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 9, 0),
+          end: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 10, 0),
+          colorClass: 'event-blue'
+        },
+        {
+          title: 'Project Review',
+          start: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 11, 30),
+          end: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 12, 30),
+          colorClass: 'event-green'
+        },
+        {
+          title: 'Lunch with Client',
+          start: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 13, 0),
+          end: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 14, 0),
+          colorClass: 'event-yellow'
+        },
+        {
+          title: 'Product Strategy',
+          start: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 15, 0),
+          end: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 16, 30),
+          colorClass: 'event-purple'
+        }
+      ];
+      
+      // Create event elements
+      if (events.length === 0) {
+        showNoEvents();
+      } else {
+        events.forEach(event => {
+          const startHour = event.start.getHours();
+          const startMinute = event.start.getMinutes();
+          const endHour = event.end.getHours();
+          const endMinute = event.end.getMinutes();
+          
+          const top = (startHour - 7) * 60 + startMinute;
+          const height = ((endHour - startHour) * 60 + (endMinute - startMinute));
+          
+          const eventElement = document.createElement('div');
+          eventElement.className = `event ${event.colorClass}`;
+          eventElement.style.top = `${top}px`;
+          eventElement.style.height = `${height}px`;
+          eventElement.style.width = 'calc(100% - 10px)';
+          
+          eventElement.innerHTML = `
+            <div class="event-title">${event.title}</div>
+            <div class="event-time">${formatTime(event.start)} - ${formatTime(event.end)}</div>
+          `;
+          
+          eventsContainer.appendChild(eventElement);
+        });
+      }
+    }
+    
+    async function fetchAndDisplayEvents() {
+      const eventsContainer = document.getElementById('events-container');
+      
+      try {
+        showLoadingSpinner();
+        
+        // In a real implementation, fetch the iCal data from your proxy
+        const response = await fetch(CALENDAR_URL);
+        const icalData = await response.text();
+        
+        // Parse the iCal data using ical.js
+        const jcalData = ICAL.parse(icalData);
+        const comp = new ICAL.Component(jcalData);
+        const vevents = comp.getAllSubcomponents('vevent');
+        
+        // Filter events for the current date
+        const startDate = new Date(currentDate);
+        startDate.setHours(0, 0, 0, 0);
+        
+        const endDate = new Date(currentDate);
+        endDate.setHours(23, 59, 59, 999);
+        
+        const todayEvents = vevents
+          .map(vevent => {
+            const event = new ICAL.Event(vevent);
+            
+            // Convert to local timezone
+            const startTime = event.startDate.toJSDate();
+            const endTime = event.endDate.toJSDate();
+            
+            return {
+              title: event.summary,
+              start: startTime,
+              end: endTime,
+              colorClass: eventColors[Math.floor(Math.random() * eventColors.length)]
+            };
+          })
+          .filter(event => {
+            return event.start >= startDate && event.start < endDate;
+          })
+          .sort((a, b) => a.start - b.start);
+        
+        // Clear the loading spinner
+        eventsContainer.innerHTML = '';
+        
+        // Display events
+        if (todayEvents.length === 0) {
+          showNoEvents();
+        } else {
+          todayEvents.forEach(event => {
+            const startHour = event.start.getHours();
+            const startMinute = event.start.getMinutes();
+            const endHour = event.end.getHours();
+            const endMinute = event.end.getMinutes();
+            
+            const top = (startHour - 7) * 60 + startMinute;
+            const height = ((endHour - startHour) * 60 + (endMinute - startMinute));
+            
+            const eventElement = document.createElement('div');
+            eventElement.className = `event ${event.colorClass}`;
+            eventElement.style.top = `${top}px`;
+            eventElement.style.height = `${height}px`;
+            eventElement.style.width = 'calc(100% - 10px)';
+            
+            eventElement.innerHTML = `
+              <div class="event-title">${event.title}</div>
+              <div class="event-time">${formatTime(event.start)} - ${formatTime(event.end)}</div>
+            `;
+            
+            eventsContainer.appendChild(eventElement);
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching calendar data:', error);
+        eventsContainer.innerHTML = `
+          <div class="no-events">
+            Error loading calendar data. Please check your calendar URL and proxy setup.
+          </div>
+        `;
+      }
+    }
+    
+    // Initialize calendar
+    document.addEventListener('DOMContentLoaded', () => {
+      renderCalendar();
+      
+      // Event listeners for navigation
+      document.getElementById('prev-day').addEventListener('click', () => {
+        currentDate.setDate(currentDate.getDate() - 1);
+        renderCalendar();
+      });
+      
+      document.getElementById('next-day').addEventListener('click', () => {
+        currentDate.setDate(currentDate.getDate() + 1);
+        renderCalendar();
+      });
+      
+      document.getElementById('today').addEventListener('click', () => {
+        currentDate = new Date();
+        renderCalendar();
+      });
+    });
+  </script>
+</body>
+</html>
+
+// Add calendar HTML
